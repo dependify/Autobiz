@@ -1,0 +1,32 @@
+{
+  "name": "@dependify/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/zod-validator": "^0.4.2",
+    "hono": "^4.6.20",
+    "zod": "^3.24.1",
+    "ioredis": "^5.4.1",
+    "bullmq": "^5.29.1",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "dotenv": "^16.4.7",
+    "@dependify/db": "workspace:*",
+    "@dependify/config": "workspace:*",
+    "@dependify/orchestrator": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.2"
+  }
+}

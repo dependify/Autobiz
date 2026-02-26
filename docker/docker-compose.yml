@@ -1,0 +1,179 @@
+version: '3.9'
+
+services:
+  # ============================================================
+  # POSTGRESQL + PGVECTOR
+  # Primary relational database with vector search support
+  # ============================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: dependify-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dependify
+      POSTGRES_USER: dependify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dependify -d dependify"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # REDIS
+  # Cache, sessions, job queues (BullMQ)
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: dependify-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme_in_production} --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-changeme_in_production}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # MINIO
+  # S3-compatible object storage for files, media, PDFs
+  # ============================================================
+  minio:
+    image: minio/minio:latest
+    container_name: dependify-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-dependify}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-changeme_in_production}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # WEAVIATE
+  # Vector database for semantic search and embeddings
+  # ============================================================
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: dependify-weaviate
+    restart: unless-stopped
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      ENABLE_MODULES: 'text2vec-openai,generative-openai'
+      CLUSTER_HOSTNAME: 'node1'
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # OLLAMA
+  # Local LLM for high-volume tasks (Llama 3.1 8B)
+  # Requires GPU — comment out if no GPU available
+  # ============================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: dependify-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # ACTIVEPIECES
+  # Workflow automation engine for plugins/automations
+  # ============================================================
+  activepieces:
+    image: activepieces/activepieces:latest
+    container_name: dependify-activepieces
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AP_ENGINE_EXECUTABLE_PATH: dist/packages/engine/main.js
+      AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:-changeme32charslongkey123456789}
+      AP_JWT_SECRET: ${AP_JWT_SECRET:-changeme_jwt_secret_key}
+      AP_FRONTEND_URL: http://localhost:8090
+      AP_POSTGRES_DATABASE: activepieces
+      AP_POSTGRES_HOST: postgres
+      AP_POSTGRES_PORT: 5432
+      AP_POSTGRES_USERNAME: dependify
+      AP_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      AP_REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@redis:6379
+      AP_SANDBOX_RUN_TIME_SECONDS: 600
+      AP_TELEMETRY_ENABLED: false
+      AP_TEMPLATES_SOURCE_URL: ""
+    ports:
+      - "8090:80"
+    networks:
+      - dependify-network
+
+  # ============================================================
+  # UPTIME KUMA
+  # Self-hosted status/uptime monitoring
+  # ============================================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: dependify-uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - dependify-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  weaviate_data:
+  ollama_data:
+  uptime_kuma_data:
+
+networks:
+  dependify-network:
+    driver: bridge

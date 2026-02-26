@@ -1,0 +1,36 @@
+{
+  "name": "@dependify/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "push": "drizzle-kit push",
+    "studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "drizzle-orm": "^0.38.3",
+    "pg": "^8.13.1",
+    "postgres": "^3.4.5",
+    "@dependify/config": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "@types/pg": "^8.11.10"
+  }
+}
